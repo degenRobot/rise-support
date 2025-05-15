@@ -1,0 +1,32 @@
+# .github/workflows/rise-digest.yml  (in your scheduler repo)
+name: Rise-support open-issues digest → Discord
+on:
+  schedule:
+    - cron:  '0 1 * * 1'   # 01:00 UTC Monday
+  workflow_dispatch:
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fetch open issues from upstream
+        id: get
+        run: |
+          curl -s https://api.github.com/repos/risechain/rise-support/issues?state=open\&per_page=100 > issues.json
+      - name: Build & post
+        run: |
+          node - <<'NODE'
+          const fs = require('fs');
+          const list = JSON.parse(fs.readFileSync('issues.json', 'utf8'))
+            .map(i => `• **${i.title.replace(/\n/g,' ')}** — ${i.created_at.slice(0,10)} — <${i.html_url}>`)
+            .join('\n');
+          const md = `**RISE Support – Open Issues (${new Date().toISOString().slice(0,10)})**\n${list}`;
+          fs.writeFileSync('body.txt', md);
+          NODE
+      - name: Send to Discord
+        env:
+          HOOK: ${{ secrets.DISCORD_WEBHOOK_URL }}
+        run: |
+          curl -s -H "Content-Type: application/json" \
+               -d "{\"content\":\"$(sed ':a;N;$!ba;s/\n/\\n/g' body.txt)\"}" \
+               "$HOOK"
